@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	bitbucket.org/creachadair/shell v0.0.6
-	github.com/grafana/grafana-plugin-sdk-go v0.164.0
+	github.com/grafana/grafana-plugin-sdk-go v0.171.0
 	github.com/jhump/protoreflect v1.10.1 // indirect
 	github.com/magefile/mage v1.14.0
 	github.com/mattn/go-runewidth v0.0.13 // indirect
