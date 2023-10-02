@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+
 	"time"
 
 	"bitbucket.org/creachadair/shell"
@@ -11,7 +13,10 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	gProxy "github.com/grafana/grafana-plugin-sdk-go/backend/proxy"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
+	"github.com/mediocregopher/radix/v4"
+	"golang.org/x/net/proxy"
 )
 
 /**
@@ -194,10 +199,50 @@ func newDataSourceInstance(_ context.Context, setting backend.DataSourceInstance
 		return nil, err
 	}
 
+	newRadixV4Client(config)
+
 	// Create datasource instance with redisClient inside
 	return &instanceSettings{
 		client,
 	}, nil
+}
+
+func newRadixV4Client(config redisClientConfiguration) (redisClient, error) {
+	log.DefaultLogger.Error("--- LND Test - starting v4")
+
+	opts := &gProxy.Options{Enabled: true}
+	dialSocksProxy, err := gProxy.Cli.NewSecureSocksProxyContextDialer(opts)
+	if err != nil {
+		log.DefaultLogger.Error("--- LND Test - Error building dialSocksProxy", "err", err)
+		return nil, err
+	}
+
+	contextDialer, ok := dialSocksProxy.(proxy.ContextDialer)
+	if !ok {
+		log.DefaultLogger.Error("--- LND Test - Error casting dialSocksProxy")
+		return nil, errors.New("unable to cast socks proxy dialer to context proxy dialer")
+	}
+
+	cfg := radix.PoolConfig{
+		Dialer: radix.Dialer{
+			NetDialer: contextDialer,
+		},
+	}
+
+	client, err := cfg.New(context.Background(), "redis", config.URL)
+	if err != nil {
+		log.DefaultLogger.Error("--- LND Test - Error creating client", "err", err)
+		return nil, err
+	}
+
+	var fooValB []byte
+	err = client.Do(context.Background(), radix.Cmd(&fooValB, "GET", "foo"))
+	if err != nil {
+		log.DefaultLogger.Error("--- LND Test - Error getting fooVal", "err", err)
+		return nil, err
+	}
+	log.DefaultLogger.Error("--- LND Test - got foo value", "fooValB(base64) ", fooValB)
+	return nil, nil
 }
 
 // Create redisClientConfiguration instance from the grafana settings
