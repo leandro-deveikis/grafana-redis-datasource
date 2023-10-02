@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"time"
 
 	"bitbucket.org/creachadair/shell"
@@ -229,7 +228,7 @@ func newRadixV4Client(config redisClientConfiguration) (redisClient, error) {
 		},
 	}
 
-	client, err := cfg.New(context.Background(), "redis", config.URL)
+	client, err := cfg.New(context.Background(), "tcp", config.URL)
 	if err != nil {
 		log.DefaultLogger.Error("--- LND Test - Error creating client", "err", err)
 		return nil, err
