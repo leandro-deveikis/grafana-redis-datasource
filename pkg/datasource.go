@@ -192,13 +192,13 @@ func newDataSourceInstance(_ context.Context, setting backend.DataSourceInstance
 		return nil, err
 	}
 
+	testRadixV4ClientWithPDC(config)
+
 	// Create radix implementation of redisClient
 	client, err := newRadixV3Client(config)
 	if err != nil {
 		return nil, err
 	}
-
-	newRadixV4Client(config)
 
 	// Create datasource instance with redisClient inside
 	return &instanceSettings{
@@ -206,7 +206,11 @@ func newDataSourceInstance(_ context.Context, setting backend.DataSourceInstance
 	}, nil
 }
 
-func newRadixV4Client(config redisClientConfiguration) (redisClient, error) {
+func testRadixV4ClientWithPDC(config redisClientConfiguration) (redisClient, error) {
+	// This is just a PoC to check if PDC can be implemented using radixV4. this will:
+	//- Create a new client with the configured url, and force PDC.
+	//- do a GET for the key 'foo'
+
 	log.DefaultLogger.Error("--- LND Test - starting v4")
 
 	opts := &gProxy.Options{Enabled: true}
