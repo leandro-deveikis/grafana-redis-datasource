@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
@@ -16,6 +15,8 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/mediocregopher/radix/v4"
 	"golang.org/x/net/proxy"
+
+	goredis "github.com/redis/go-redis/v9"
 )
 
 /**
@@ -193,6 +194,7 @@ func newDataSourceInstance(_ context.Context, setting backend.DataSourceInstance
 	}
 
 	testRadixV4ClientWithPDC(config)
+	testGoRedisV4ClientWithPDC(config)
 
 	// Create radix implementation of redisClient
 	client, err := newRadixV3Client(config)
@@ -206,24 +208,61 @@ func newDataSourceInstance(_ context.Context, setting backend.DataSourceInstance
 	}, nil
 }
 
-func testRadixV4ClientWithPDC(config redisClientConfiguration) (redisClient, error) {
-	// This is just a PoC to check if PDC can be implemented using radixV4. this will:
+func testGoRedisV4ClientWithPDC(config redisClientConfiguration) {
+	// This is just a PoC to check if PDC can be implemented using go redis (official redis library). this will:
 	//- Create a new client with the configured url, and force PDC.
 	//- do a GET for the key 'foo'
 
-	log.DefaultLogger.Error("--- LND Test - starting v4")
+	ctx := context.Background()
+	log.DefaultLogger.Error("--- LND Test GoRedis - Starting go-redis test")
 
+	// grafana set up
 	opts := &gProxy.Options{Enabled: true}
 	dialSocksProxy, err := gProxy.Cli.NewSecureSocksProxyContextDialer(opts)
 	if err != nil {
-		log.DefaultLogger.Error("--- LND Test - Error building dialSocksProxy", "err", err)
-		return nil, err
+		log.DefaultLogger.Error("--- LND Test GoRedis- Error building dialSocksProxy", "err", err)
+		return
 	}
 
 	contextDialer, ok := dialSocksProxy.(proxy.ContextDialer)
 	if !ok {
-		log.DefaultLogger.Error("--- LND Test - Error casting dialSocksProxy")
-		return nil, errors.New("unable to cast socks proxy dialer to context proxy dialer")
+		log.DefaultLogger.Error("--- LND Test GoRedis- Error casting dialSocksProxy")
+		return
+	}
+	//
+	rdb := goredis.NewClient(&goredis.Options{
+		Addr:     config.URL,
+		Password: "", // no password set
+		DB:       0,  // use default DB
+		Dialer:   contextDialer.DialContext,
+	})
+
+	val, err := rdb.Get(ctx, "foo").Result()
+	if err != nil {
+		log.DefaultLogger.Error("--- LND Test GoRedis - Error getting value", "err", err)
+		return
+	}
+	log.DefaultLogger.Error("--- LND Test GoRedis - Got foo value", "val", val)
+}
+
+func testRadixV4ClientWithPDC(config redisClientConfiguration) {
+	// This is just a PoC to check if PDC can be implemented using radixV4. this will:
+	//- Create a new client with the configured url, and force PDC.
+	//- do a GET for the key 'foo'
+
+	log.DefaultLogger.Error("--- LND Test - starting Radix v4 test")
+
+	opts := &gProxy.Options{Enabled: true}
+	dialSocksProxy, err := gProxy.Cli.NewSecureSocksProxyContextDialer(opts)
+	if err != nil {
+		log.DefaultLogger.Error("--- LND Test RadixV4- Error building dialSocksProxy", "err", err)
+		return
+	}
+
+	contextDialer, ok := dialSocksProxy.(proxy.ContextDialer)
+	if !ok {
+		log.DefaultLogger.Error("--- LND Test RadixV4- Error casting dialSocksProxy")
+		return
 	}
 
 	cfg := radix.PoolConfig{
@@ -234,18 +273,17 @@ func testRadixV4ClientWithPDC(config redisClientConfiguration) (redisClient, err
 
 	client, err := cfg.New(context.Background(), "tcp", config.URL)
 	if err != nil {
-		log.DefaultLogger.Error("--- LND Test - Error creating client", "err", err)
-		return nil, err
+		log.DefaultLogger.Error("--- LND Test RadixV4- Error creating client", "err", err)
+		return
 	}
 
 	var fooValB []byte
 	err = client.Do(context.Background(), radix.Cmd(&fooValB, "GET", "foo"))
 	if err != nil {
-		log.DefaultLogger.Error("--- LND Test - Error getting fooVal", "err", err)
-		return nil, err
+		log.DefaultLogger.Error("--- LND Test RadixV4- Error getting fooVal", "err", err)
+		return
 	}
-	log.DefaultLogger.Error("--- LND Test - got foo value", "fooValB(base64) ", fooValB)
-	return nil, nil
+	log.DefaultLogger.Error("--- LND Test RadixV4- got foo value", "fooValB(base64) ", fooValB)
 }
 
 // Create redisClientConfiguration instance from the grafana settings
